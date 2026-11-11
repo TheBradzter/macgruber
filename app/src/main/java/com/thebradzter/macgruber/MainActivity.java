@@ -8,6 +8,10 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.ImageDecoder;
+import android.graphics.drawable.AnimatedImageDrawable;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.Insets;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -58,6 +62,8 @@ public class MainActivity extends Activity {
         final int resId;
         /** A clip loaded from the phone's clips folder, or null for a built-in sound. */
         final File file;
+        /** A picture or GIF from the phone's gifs folder shown on this button, or null. */
+        File gif;
 
         Sound(String key, String emoji, String label, int resId) {
             this(key, emoji, label, resId, null);
@@ -184,7 +190,65 @@ public class MainActivity extends Activity {
                 found.add(new Sound("file:" + name, emoji, label, 0, f));
             }
         }
-        return found.isEmpty() ? BUILT_IN : found.toArray(new Sound[0]);
+        Sound[] result = found.isEmpty() ? BUILT_IN : found.toArray(new Sound[0]);
+        assignGifs(result);
+        return result;
+    }
+
+    private static final List<String> IMAGE_EXTENSIONS = Arrays.asList(
+            "gif", "webp", "png", "jpg", "jpeg");
+
+    /**
+     * Pictures in Android/data/com.thebradzter.macgruber/files/gifs go on the buttons. A picture whose
+     * name matches a clip's name goes on that clip's button; the rest fill the other buttons in order.
+     */
+    private void assignGifs(Sound[] list) {
+        for (Sound s : list) {
+            s.gif = null;
+        }
+        File dir = getExternalFilesDir("gifs");
+        File[] files = dir == null ? null : dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+        List<File> unmatched = new ArrayList<>();
+        for (File f : files) {
+            String name = f.getName();
+            int dot = name.lastIndexOf('.');
+            if (!f.isFile() || dot <= 0
+                    || !IMAGE_EXTENSIONS.contains(name.substring(dot + 1).toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            String base = name.substring(0, dot);
+            Sound match = null;
+            for (Sound s : list) {
+                if (s.gif == null && s.file != null && baseName(s.file).equalsIgnoreCase(base)) {
+                    match = s;
+                    break;
+                }
+            }
+            if (match != null) {
+                match.gif = f;
+            } else {
+                unmatched.add(f);
+            }
+        }
+        int next = 0;
+        for (Sound s : list) {
+            if (next >= unmatched.size()) {
+                break;
+            }
+            if (s.gif == null) {
+                s.gif = unmatched.get(next++);
+            }
+        }
+    }
+
+    private static String baseName(File f) {
+        String name = f.getName();
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
     }
 
     /** "03_kfbr-392" becomes "KFBR 392". */
@@ -306,7 +370,9 @@ public class MainActivity extends Activity {
         Tile tile = tiles[index];
         tile.badge.setVisibility(customUri(s) != null ? View.VISIBLE : View.GONE);
 
-        Uri picture = pictureUri(s);
+        // A picture chosen on the phone wins over one from the gifs folder.
+        Uri custom = pictureUri(s);
+        Uri picture = custom != null ? custom : (s.gif != null ? Uri.fromFile(s.gif) : null);
         if (picture == null) {
             tile.picture.setImageDrawable(null);
             tile.picture.setVisibility(View.GONE);
@@ -314,21 +380,50 @@ public class MainActivity extends Activity {
             return;
         }
         imageLoader.execute(() -> {
-            Bitmap bitmap = decodePicture(picture);
+            Drawable drawable = decodePicture(picture);
             mainHandler.post(() -> {
-                if (isDestroyed() || !picture.equals(pictureUri(s))) {
+                Uri nowCustom = pictureUri(s);
+                Uri now = nowCustom != null ? nowCustom : (s.gif != null ? Uri.fromFile(s.gif) : null);
+                if (isDestroyed() || !picture.equals(now)) {
                     return; // Changed again while loading.
                 }
-                boolean ok = bitmap != null;
-                tile.picture.setImageBitmap(bitmap);
+                boolean ok = drawable != null;
+                tile.picture.setImageDrawable(drawable);
                 tile.picture.setVisibility(ok ? View.VISIBLE : View.GONE);
                 tile.scrim.setVisibility(ok ? View.VISIBLE : View.GONE);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                        && drawable instanceof AnimatedImageDrawable) {
+                    ((AnimatedImageDrawable) drawable).start();
+                }
             });
         });
     }
 
-    /** Loads a picture scaled down to tile size, or null if it can't be read. */
-    private Bitmap decodePicture(Uri uri) {
+    /** Loads a picture (animated if it's a GIF) scaled down to tile size, or null on failure. */
+    private Drawable decodePicture(Uri uri) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                ImageDecoder.Source source = "file".equals(uri.getScheme())
+                        ? ImageDecoder.createSource(new File(uri.getPath()))
+                        : ImageDecoder.createSource(getContentResolver(), uri);
+                return ImageDecoder.decodeDrawable(source, (decoder, info, src) -> {
+                    int sample = 1;
+                    while (info.getSize().getWidth() / (sample * 2) >= PICTURE_MAX_PX
+                            && info.getSize().getHeight() / (sample * 2) >= PICTURE_MAX_PX) {
+                        sample *= 2;
+                    }
+                    decoder.setTargetSampleSize(sample);
+                });
+            } catch (Exception | OutOfMemoryError e) {
+                return null;
+            }
+        }
+        Bitmap bitmap = decodeBitmap(uri);
+        return bitmap == null ? null : new BitmapDrawable(getResources(), bitmap);
+    }
+
+    /** Loads a still picture scaled down to tile size, or null if it can't be read. */
+    private Bitmap decodeBitmap(Uri uri) {
         try {
             BitmapFactory.Options bounds = new BitmapFactory.Options();
             bounds.inJustDecodeBounds = true;
