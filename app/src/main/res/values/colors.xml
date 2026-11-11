@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MacGruber theme: army olive, explosion orange/red, mullet gold -->
+    <color name="mg_black">#FF121212</color>
+    <color name="mg_olive">#FF4B5320</color>
+    <color name="mg_olive_dark">#FF2F3414</color>
+    <color name="mg_orange">#FFFF8A1E</color>
+    <color name="mg_fire">#FFC8361A</color>
+    <color name="mg_gold">#FFFFC233</color>
+    <color name="mg_green">#FF3F8F2E</color>
+    <color name="mg_green_pressed">#FF2E6B21</color>
+    <color name="mg_red">#FFC8102E</color>
+    <color name="mg_red_pressed">#FF8E0B20</color>
+    <color name="mg_white">#FFFFFFFF</color>
+    <color name="mg_grey">#FFCFCFC4</color>
+</resources>

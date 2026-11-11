@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Soundboard" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/mg_black</item>
+        <item name="android:statusBarColor">@color/mg_olive_dark</item>
+        <item name="android:navigationBarColor">@color/mg_olive_dark</item>
+        <item name="android:colorAccent">@color/mg_orange</item>
+        <item name="android:colorPrimary">@color/mg_olive</item>
+        <item name="android:colorPrimaryDark">@color/mg_olive_dark</item>
+    </style>
+</resources>

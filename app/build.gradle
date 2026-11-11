@@ -1,0 +1,45 @@
+plugins {
+    id 'com.android.application'
+}
+
+// CI passes the run number so every build installs over the previous one.
+def ciBuild = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+
+android {
+    namespace 'com.thebradzter.macgruber'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.thebradzter.macgruber'
+        minSdk 26
+        targetSdk 35
+        versionCode ciBuild
+        versionName "1.0.${ciBuild}"
+    }
+
+    // A fixed, non-secret signing key committed to the repo, so every CI build
+    // has the same signature and can be installed as an update over the last one.
+    signingConfigs {
+        soundboard {
+            storeFile rootProject.file('keystore/soundboard.jks')
+            storePassword 'macgruber'
+            keyAlias 'soundboard'
+            keyPassword 'macgruber'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.soundboard
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.soundboard
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
