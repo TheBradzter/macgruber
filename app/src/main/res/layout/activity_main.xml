@@ -13,32 +13,52 @@
         android:background="@color/mg_olive"
         android:elevation="4dp"
         android:gravity="center"
-        android:orientation="vertical"
-        android:paddingTop="14dp"
-        android:paddingBottom="12dp">
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="10dp">
 
-        <TextView
+        <ImageView
+            android:id="@+id/mascot"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="@drawable/mascot_frame"
+            android:contentDescription="@string/mascot_description"
+            android:padding="3dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/mascot" />
+
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="sans-serif-black"
-            android:letterSpacing="0.12"
-            android:shadowColor="@color/mg_fire"
-            android:shadowDx="3"
-            android:shadowDy="3"
-            android:shadowRadius="1"
-            android:text="@string/title"
-            android:textColor="@color/mg_gold"
-            android:textSize="34sp" />
+            android:layout_marginStart="12dp"
+            android:gravity="center"
+            android:orientation="vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="sans-serif-condensed"
-            android:letterSpacing="0.5"
-            android:text="@string/subtitle"
-            android:textColor="@color/mg_white"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.08"
+                android:shadowColor="@color/mg_fire"
+                android:shadowDx="3"
+                android:shadowDy="3"
+                android:shadowRadius="1"
+                android:text="@string/title"
+                android:textColor="@color/mg_gold"
+                android:textSize="30sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-condensed"
+                android:letterSpacing="0.5"
+                android:text="@string/subtitle"
+                android:textColor="@color/mg_white"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 
     <ScrollView

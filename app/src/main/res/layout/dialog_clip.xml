@@ -20,9 +20,39 @@
         android:id="@+id/dialog_body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="20dp"
+        android:paddingStart="20dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="12dp"
+        android:text="@string/dialog_body"
         android:textColor="@color/mg_grey"
         android:textSize="15sp" />
+
+    <Button
+        android:id="@+id/btn_choose_clip"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:background="@drawable/btn_green"
+        android:stateListAnimator="@null"
+        android:text="@string/choose_clip"
+        android:textColor="@color/mg_white"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btn_choose_picture"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/btn_green"
+        android:stateListAnimator="@null"
+        android:text="@string/choose_picture"
+        android:textColor="@color/mg_white"
+        android:textStyle="bold" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -33,22 +63,9 @@
         android:padding="10dp">
 
         <Button
-            android:id="@+id/btn_cancel"
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:background="@drawable/btn_red"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:stateListAnimator="@null"
-            android:text="@string/cancel"
-            android:textColor="@color/mg_white"
-            android:textStyle="bold" />
-
-        <Button
             android:id="@+id/btn_reset"
             android:layout_width="wrap_content"
             android:layout_height="44dp"
-            android:layout_marginStart="8dp"
             android:background="@drawable/btn_green"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
@@ -58,15 +75,15 @@
             android:textStyle="bold" />
 
         <Button
-            android:id="@+id/btn_choose"
+            android:id="@+id/btn_cancel"
             android:layout_width="wrap_content"
             android:layout_height="44dp"
             android:layout_marginStart="8dp"
-            android:background="@drawable/btn_green"
+            android:background="@drawable/btn_red"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
             android:stateListAnimator="@null"
-            android:text="@string/choose_clip"
+            android:text="@string/cancel"
             android:textColor="@color/mg_white"
             android:textStyle="bold" />
     </LinearLayout>

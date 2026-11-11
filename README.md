@@ -8,8 +8,13 @@ Every built-in sound is original: synthesized effects (explosions, 80s synths, a
 with text-to-speech readings of short MacGruber-style lines. No audio from the film or TV show is included,
 since those clips are copyrighted.
 
-**Use your own clips:** hold any button, tap **CHOOSE CLIP** and pick an audio file on your phone. That button
-then plays your file (it shows "★ your clip"). Hold it again and tap **RESET** to go back to the built-in sound.
+**Pictures:** each button has a funny emoji, and the header has an original cartoon mullet-commando mascot
+(`tools/art/mascot.svg`). Real MacGruber stills aren't bundled because they're copyrighted and show a real
+actor's likeness, but you can add your own (see below).
+
+**Use your own clips and pictures:** hold any button, then tap **CHOOSE SOUND CLIP** or **CHOOSE PICTURE**
+and pick a file on your phone. Custom clips show "★ your clip"; custom pictures fill the button.
+Hold it again and tap **RESET BUTTON** to go back to the built-in sound and look.
 
 To regenerate the built-in sounds (needs Python 3 with numpy, `espeak-ng` and `ffmpeg`):
 

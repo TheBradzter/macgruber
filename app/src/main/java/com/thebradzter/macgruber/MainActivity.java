@@ -5,6 +5,8 @@ import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.graphics.Typeface;
@@ -14,6 +16,8 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -21,53 +25,75 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.GridLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.InputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class MainActivity extends Activity {
 
     private static final int REQUEST_PICK_CLIP = 392;
+    private static final int REQUEST_PICK_PICTURE = 393;
     private static final String PREFS = "custom_clips";
+    private static final String PICTURE_PREFIX = "picture_";
     private static final String STATE_PENDING = "pending_sound";
+    private static final int PICTURE_MAX_PX = 480;
 
     /** One soundboard button. The key is stable and is used to store a custom clip. */
     private static final class Sound {
         final String key;
+        final String emoji;
         final String label;
         final int resId;
 
-        Sound(String key, String label, int resId) {
+        Sound(String key, String emoji, String label, int resId) {
             this.key = key;
+            this.emoji = emoji;
             this.label = label;
             this.resId = resId;
         }
     }
 
     private static final Sound[] SOUNDS = {
-            new Sound("macgruber", "MACGRUBER!", R.raw.snd_macgruber),
-            new Sound("kfbr392", "KFBR392", R.raw.snd_kfbr392),
-            new Sound("countdown", "3… 2… 1… BOOM", R.raw.snd_countdown),
-            new Sound("boom", "BIG BOOM", R.raw.snd_boom),
-            new Sound("paperclip", "PAPERCLIP & GUM", R.raw.snd_paperclip),
-            new Sound("celery", "CELERY STALK", R.raw.snd_celery),
-            new Sound("mullet", "MULLET POWER", R.raw.snd_mullet),
-            new Sound("seal", "NAVY SEAL… ETC", R.raw.snd_seal),
-            new Sound("lets_do_this", "LET'S DO THIS!", R.raw.snd_lets_do_this),
-            new Sound("high_five", "HIGH FIVE?", R.raw.snd_high_five),
-            new Sound("nooo", "SLOW-MO NOOO", R.raw.snd_nooo),
-            new Sound("ticking", "TICKING BOMB", R.raw.snd_ticking),
-            new Sound("rocket", "ROCKET LAUNCHER", R.raw.snd_rocket),
-            new Sound("gunshot", "PEW PEW PEW", R.raw.snd_gunshot),
-            new Sound("helicopter", "CHOPPER", R.raw.snd_helicopter),
-            new Sound("synth", "80s SYNTH STAB", R.raw.snd_synth),
-            new Sound("synth_arp", "MONTAGE SYNTH", R.raw.snd_synth_arp),
-            new Sound("guitar", "POWER RIFF", R.raw.snd_guitar),
-            new Sound("airhorn", "AIR HORN", R.raw.snd_airhorn),
-            new Sound("sad", "SAD TROMBONE", R.raw.snd_sad),
+            new Sound("macgruber", "\uD83D\uDCAA", "MACGRUBER!", R.raw.snd_macgruber),
+            new Sound("kfbr392", "\uD83D\uDE97", "KFBR392", R.raw.snd_kfbr392),
+            new Sound("countdown", "\u23F1\uFE0F", "3… 2… 1… BOOM", R.raw.snd_countdown),
+            new Sound("boom", "\uD83D\uDCA5", "BIG BOOM", R.raw.snd_boom),
+            new Sound("paperclip", "\uD83D\uDCCE", "PAPERCLIP & GUM", R.raw.snd_paperclip),
+            new Sound("celery", "\uD83E\uDD6C", "CELERY STALK", R.raw.snd_celery),
+            new Sound("mullet", "\uD83D\uDC87", "MULLET POWER", R.raw.snd_mullet),
+            new Sound("seal", "\uD83C\uDF96\uFE0F", "NAVY SEAL… ETC", R.raw.snd_seal),
+            new Sound("lets_do_this", "\uD83D\uDD25", "LET'S DO THIS!", R.raw.snd_lets_do_this),
+            new Sound("high_five", "\u270B", "HIGH FIVE?", R.raw.snd_high_five),
+            new Sound("nooo", "\uD83D\uDE31", "SLOW-MO NOOO", R.raw.snd_nooo),
+            new Sound("ticking", "\uD83D\uDCA3", "TICKING BOMB", R.raw.snd_ticking),
+            new Sound("rocket", "\uD83D\uDE80", "ROCKET LAUNCHER", R.raw.snd_rocket),
+            new Sound("gunshot", "\uD83D\uDD2B", "PEW PEW PEW", R.raw.snd_gunshot),
+            new Sound("helicopter", "\uD83D\uDE81", "CHOPPER", R.raw.snd_helicopter),
+            new Sound("synth", "\uD83C\uDFB9", "80s SYNTH STAB", R.raw.snd_synth),
+            new Sound("synth_arp", "\uD83D\uDD7A", "MONTAGE SYNTH", R.raw.snd_synth_arp),
+            new Sound("guitar", "\uD83C\uDFB8", "POWER RIFF", R.raw.snd_guitar),
+            new Sound("airhorn", "\uD83D\uDCE2", "AIR HORN", R.raw.snd_airhorn),
+            new Sound("sad", "\uD83C\uDFBA", "SAD TROMBONE", R.raw.snd_sad),
     };
 
-    private final Button[] buttons = new Button[SOUNDS.length];
+    /** Views that make up one tile. */
+    private static final class Tile {
+        FrameLayout frame;
+        ImageView picture;
+        View scrim;
+        TextView badge;
+    }
+
+    private final Tile[] tiles = new Tile[SOUNDS.length];
+    private final ExecutorService imageLoader = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private MediaPlayer player;
     private int playingIndex = -1;
@@ -98,6 +124,12 @@ public class MainActivity extends Activity {
     protected void onStop() {
         super.onStop();
         stopPlayback();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        imageLoader.shutdownNow();
     }
 
     // ---------------------------------------------------------------- layout
@@ -131,40 +163,128 @@ public class MainActivity extends Activity {
         int margin = dp(6);
         for (int i = 0; i < SOUNDS.length; i++) {
             final int index = i;
-            Button b = new Button(this);
-            b.setAllCaps(false);
-            b.setTextColor(Color.WHITE);
-            b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-            b.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
-            b.setShadowLayer(4f, 2f, 2f, 0xAA000000);
-            b.setGravity(Gravity.CENTER);
-            b.setPadding(dp(8), dp(8), dp(8), dp(8));
-            b.setStateListAnimator(null);
-            b.setBackgroundResource(R.drawable.tile);
-            b.setOnClickListener(v -> play(index));
-            b.setOnLongClickListener(v -> {
-                showClipDialog(index);
+            Tile tile = new Tile();
+            tiles[i] = tile;
+
+            FrameLayout frame = new FrameLayout(this);
+            frame.setBackgroundResource(R.drawable.tile);
+            frame.setClipToOutline(true);
+            frame.setClickable(true);
+            frame.setOnClickListener(v -> play(index));
+            frame.setOnLongClickListener(v -> {
+                showCustomiseDialog(index);
                 return true;
             });
+            tile.frame = frame;
+
+            ImageView picture = new ImageView(this);
+            picture.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            picture.setVisibility(View.GONE);
+            frame.addView(picture, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            tile.picture = picture;
+
+            View scrim = new View(this);
+            scrim.setBackgroundResource(R.drawable.tile_scrim);
+            scrim.setVisibility(View.GONE);
+            frame.addView(scrim, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            tile.scrim = scrim;
+
+            LinearLayout column = new LinearLayout(this);
+            column.setOrientation(LinearLayout.VERTICAL);
+            column.setGravity(Gravity.CENTER);
+            column.setPadding(dp(6), dp(6), dp(6), dp(6));
+
+            TextView emoji = new TextView(this);
+            emoji.setText(SOUNDS[i].emoji);
+            emoji.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
+            emoji.setGravity(Gravity.CENTER);
+            column.addView(emoji);
+
+            TextView label = new TextView(this);
+            label.setText(SOUNDS[i].label);
+            label.setTextColor(Color.WHITE);
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            label.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
+            label.setShadowLayer(4f, 2f, 2f, 0xCC000000);
+            label.setGravity(Gravity.CENTER);
+            label.setMaxLines(2);
+            column.addView(label);
+
+            TextView badge = new TextView(this);
+            badge.setText(R.string.your_clip);
+            badge.setTextColor(0xFFFFC233);
+            badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            badge.setShadowLayer(3f, 1f, 1f, 0xCC000000);
+            badge.setGravity(Gravity.CENTER);
+            column.addView(badge);
+            tile.badge = badge;
+
+            frame.addView(column, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
             GridLayout.LayoutParams lp = new GridLayout.LayoutParams(
                     GridLayout.spec(GridLayout.UNDEFINED),
                     GridLayout.spec(GridLayout.UNDEFINED, 1f));
             lp.width = 0;
-            lp.height = dp(96);
+            lp.height = dp(116);
             lp.setMargins(margin, margin, margin, margin);
-            grid.addView(b, lp);
-            buttons[i] = b;
-            refreshLabel(i);
+            grid.addView(frame, lp);
+
+            refreshTile(i);
         }
     }
 
-    private void refreshLabel(int index) {
+    private void refreshTile(int index) {
         Sound s = SOUNDS[index];
-        if (customUri(s) != null) {
-            buttons[index].setText(s.label + "\n" + getString(R.string.your_clip));
-        } else {
-            buttons[index].setText(s.label);
+        Tile tile = tiles[index];
+        tile.badge.setVisibility(customUri(s) != null ? View.VISIBLE : View.GONE);
+
+        Uri picture = pictureUri(s);
+        if (picture == null) {
+            tile.picture.setImageDrawable(null);
+            tile.picture.setVisibility(View.GONE);
+            tile.scrim.setVisibility(View.GONE);
+            return;
+        }
+        imageLoader.execute(() -> {
+            Bitmap bitmap = decodePicture(picture);
+            mainHandler.post(() -> {
+                if (isDestroyed() || !picture.equals(pictureUri(s))) {
+                    return; // Changed again while loading.
+                }
+                boolean ok = bitmap != null;
+                tile.picture.setImageBitmap(bitmap);
+                tile.picture.setVisibility(ok ? View.VISIBLE : View.GONE);
+                tile.scrim.setVisibility(ok ? View.VISIBLE : View.GONE);
+            });
+        });
+    }
+
+    /** Loads a picture scaled down to tile size, or null if it can't be read. */
+    private Bitmap decodePicture(Uri uri) {
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                if (in == null) {
+                    return null;
+                }
+                BitmapFactory.decodeStream(in, null, bounds);
+            }
+            int sample = 1;
+            while (bounds.outWidth / (sample * 2) >= PICTURE_MAX_PX
+                    && bounds.outHeight / (sample * 2) >= PICTURE_MAX_PX) {
+                sample *= 2;
+            }
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                return in == null ? null : BitmapFactory.decodeStream(in, null, opts);
+            }
+        } catch (Exception | OutOfMemoryError e) {
+            return null;
         }
     }
 
@@ -196,9 +316,7 @@ public class MainActivity extends Activity {
 
         player = mp;
         playingIndex = index;
-        buttons[index].setBackgroundResource(R.drawable.tile_playing);
-        buttons[index].setTextColor(Color.BLACK);
-        buttons[index].setShadowLayer(0f, 0f, 0f, 0);
+        tiles[index].frame.setForeground(getDrawable(R.drawable.tile_playing));
         mp.setOnCompletionListener(p -> {
             if (p == player) {
                 stopPlayback();
@@ -233,10 +351,7 @@ public class MainActivity extends Activity {
             player = null;
         }
         if (playingIndex >= 0) {
-            Button b = buttons[playingIndex];
-            b.setBackgroundResource(R.drawable.tile);
-            b.setTextColor(Color.WHITE);
-            b.setShadowLayer(4f, 2f, 2f, 0xAA000000);
+            tiles[playingIndex].frame.setForeground(null);
             playingIndex = -1;
         }
     }
@@ -244,13 +359,21 @@ public class MainActivity extends Activity {
     // ---------------------------------------------------------- custom clips
 
     private Uri customUri(Sound s) {
-        String value = prefs.getString(s.key, null);
+        return storedUri(s.key);
+    }
+
+    private Uri pictureUri(Sound s) {
+        return storedUri(PICTURE_PREFIX + s.key);
+    }
+
+    private Uri storedUri(String key) {
+        String value = prefs.getString(key, null);
         return value == null ? null : Uri.parse(value);
     }
 
-    private void showClipDialog(int index) {
+    private void showCustomiseDialog(int index) {
         Sound s = SOUNDS[index];
-        boolean hasCustom = customUri(s) != null;
+        boolean hasCustom = customUri(s) != null || pictureUri(s) != null;
 
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -263,31 +386,33 @@ public class MainActivity extends Activity {
         }
 
         TextView title = dialog.findViewById(R.id.dialog_title);
-        TextView body = dialog.findViewById(R.id.dialog_body);
         title.setText(getString(R.string.dialog_title, s.label));
-        body.setText(hasCustom ? R.string.dialog_body_custom : R.string.dialog_body_default);
 
         Button reset = dialog.findViewById(R.id.btn_reset);
         reset.setVisibility(hasCustom ? View.VISIBLE : View.GONE);
         reset.setOnClickListener(v -> {
-            clearCustom(index);
+            resetTile(index);
             dialog.dismiss();
         });
         dialog.findViewById(R.id.btn_cancel).setOnClickListener(v -> dialog.dismiss());
-        dialog.findViewById(R.id.btn_choose).setOnClickListener(v -> {
+        dialog.findViewById(R.id.btn_choose_clip).setOnClickListener(v -> {
             dialog.dismiss();
-            pickClip(index);
+            pick(index, "audio/*", REQUEST_PICK_CLIP);
+        });
+        dialog.findViewById(R.id.btn_choose_picture).setOnClickListener(v -> {
+            dialog.dismiss();
+            pick(index, "image/*", REQUEST_PICK_PICTURE);
         });
         dialog.show();
     }
 
-    private void pickClip(int index) {
+    private void pick(int index, String mimeType, int requestCode) {
         pendingIndex = index;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("audio/*");
+        intent.setType(mimeType);
         try {
-            startActivityForResult(intent, REQUEST_PICK_CLIP);
+            startActivityForResult(intent, requestCode);
         } catch (ActivityNotFoundException e) {
             pendingIndex = -1;
             Toast.makeText(this, R.string.no_picker, Toast.LENGTH_SHORT).show();
@@ -297,7 +422,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQUEST_PICK_CLIP) {
+        if (requestCode != REQUEST_PICK_CLIP && requestCode != REQUEST_PICK_PICTURE) {
             return;
         }
         int index = pendingIndex;
@@ -307,35 +432,40 @@ public class MainActivity extends Activity {
             return;
         }
 
+        boolean isPicture = requestCode == REQUEST_PICK_PICTURE;
+        String key = isPicture ? PICTURE_PREFIX + SOUNDS[index].key : SOUNDS[index].key;
         Uri uri = data.getData();
         try {
             getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
         } catch (SecurityException ignored) {
-            // Some providers don't offer persistable access; the clip still works until reboot.
+            // Some providers don't offer persistable access; the file still works until reboot.
         }
-        releaseOldPermission(SOUNDS[index], uri);
-        prefs.edit().putString(SOUNDS[index].key, uri.toString()).apply();
-        refreshLabel(index);
-        Toast.makeText(this, R.string.clip_saved, Toast.LENGTH_SHORT).show();
+        releaseOldPermission(key, uri);
+        prefs.edit().putString(key, uri.toString()).apply();
+        refreshTile(index);
+        Toast.makeText(this, isPicture ? R.string.picture_saved : R.string.clip_saved, Toast.LENGTH_SHORT).show();
     }
 
-    private void clearCustom(int index) {
+    private void resetTile(int index) {
         if (playingIndex == index) {
             stopPlayback();
         }
-        releaseOldPermission(SOUNDS[index], null);
-        prefs.edit().remove(SOUNDS[index].key).apply();
-        refreshLabel(index);
+        String[] keys = {SOUNDS[index].key, PICTURE_PREFIX + SOUNDS[index].key};
+        for (String key : keys) {
+            releaseOldPermission(key, null);
+            prefs.edit().remove(key).apply();
+        }
+        refreshTile(index);
     }
 
-    /** Drops our read access to a button's previous clip, unless another button still uses it. */
-    private void releaseOldPermission(Sound sound, Uri replacement) {
-        Uri old = customUri(sound);
+    /** Drops our read access to a key's previous file, unless another button still uses it. */
+    private void releaseOldPermission(String key, Uri replacement) {
+        Uri old = storedUri(key);
         if (old == null || old.equals(replacement)) {
             return;
         }
-        for (Sound other : SOUNDS) {
-            if (other != sound && old.equals(customUri(other))) {
+        for (String other : prefs.getAll().keySet()) {
+            if (!other.equals(key) && old.equals(storedUri(other))) {
                 return;
             }
         }

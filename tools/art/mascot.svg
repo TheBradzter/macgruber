@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="480" height="480">
+  <rect width="120" height="120" fill="#4B5320"/>
+  <!-- mullet back hair -->
+  <path fill="#7A4A1E" d="M30,46 C24,70 22,92 30,108 L44,100 L50,110 L58,98 L70,110 L76,98 L88,108 C96,92 96,70 90,46 Z"/>
+  <!-- neck -->
+  <path fill="#E9B48A" d="M48,86 L72,86 L74,104 L46,104 Z"/>
+  <!-- flannel shirt -->
+  <path fill="#C8361A" d="M22,120 C24,104 36,98 48,96 L60,106 L72,96 C84,98 96,104 98,120 Z"/>
+  <path fill="#7A1A0C" d="M36,120 L38,100 L42,99 L40,120 Z M78,120 L80,99 L84,100 L84,120 Z M58,120 L58,106 L62,106 L62,120 Z"/>
+  <path fill="#FFFFFF" d="M48,96 L60,106 L54,112 L44,100 Z M72,96 L60,106 L66,112 L76,100 Z"/>
+  <!-- face -->
+  <ellipse fill="#F2C29B" cx="60" cy="62" rx="24" ry="28"/>
+  <!-- ears -->
+  <ellipse fill="#E9B48A" cx="36" cy="64" rx="4" ry="7"/>
+  <ellipse fill="#E9B48A" cx="84" cy="64" rx="4" ry="7"/>
+  <!-- top hair / feathered bangs -->
+  <path fill="#8B5A2B" d="M34,56 C32,30 48,22 62,24 C80,24 90,36 86,56 C82,44 76,40 70,42 C66,36 58,36 54,42 C48,38 40,44 34,56 Z"/>
+  <!-- headband -->
+  <path fill="#FFC233" d="M35,48 C48,42 72,42 85,48 L85,54 C72,48 48,48 35,54 Z"/>
+  <!-- aviators -->
+  <path fill="#1B1B1B" d="M40,60 L57,60 C57,70 52,74 46,73 C41,72 39,66 40,60 Z M63,60 L80,60 C81,66 79,72 74,73 C68,74 63,70 63,60 Z"/>
+  <rect fill="#1B1B1B" x="56" y="60" width="8" height="2.5"/>
+  <path fill="#FFFFFF" opacity="0.5" d="M43,62 L48,62 L44,67 Z M66,62 L71,62 L67,67 Z"/>
+  <!-- eyebrows raised -->
+  <path fill="#5A3714" d="M40,56 L56,54 L56,57 L40,58 Z M64,54 L80,56 L80,58 L64,57 Z"/>
+  <!-- nose -->
+  <path fill="#D9A27A" d="M58,66 L62,66 L64,77 L56,77 Z"/>
+  <!-- stubble + cocky grin -->
+  <path fill="#C9A27F" opacity="0.6" d="M40,74 C44,90 76,90 80,74 C76,84 44,84 40,74 Z"/>
+  <path fill="#7A1A0C" d="M49,80 C54,86 68,86 73,78 C68,81 56,82 49,80 Z"/>
+  <path fill="#FFFFFF" d="M52,81 C58,83 66,82 71,79 L70,81 C65,83 58,84 53,82 Z"/>
+</svg>

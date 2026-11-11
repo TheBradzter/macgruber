@@ -3,16 +3,18 @@
     <string name="app_name">MacGruber Soundboard</string>
     <string name="title">MACGRUBER</string>
     <string name="subtitle">SOUNDBOARD</string>
-    <string name="hint">Hold any button to use your own clip</string>
+    <string name="mascot_description">Cartoon mullet commando</string>
+    <string name="hint">Hold a button to add your own clip or picture</string>
     <string name="stop">STOP</string>
     <string name="dialog_title">Customise “%1$s”</string>
-    <string name="dialog_body_default">This button plays the built-in sound. Pick an audio file from your phone (for example a clip you recorded) to play instead.</string>
-    <string name="dialog_body_custom">This button is playing your own clip. Choose a different file, or reset it to the built-in sound.</string>
-    <string name="choose_clip">CHOOSE CLIP</string>
-    <string name="reset">RESET</string>
+    <string name="dialog_body">Swap in your own sound or picture from your phone, like a clip you recorded or your favourite MacGruber photo.</string>
+    <string name="choose_clip">CHOOSE SOUND CLIP</string>
+    <string name="choose_picture">CHOOSE PICTURE</string>
+    <string name="reset">RESET BUTTON</string>
     <string name="cancel">CANCEL</string>
     <string name="your_clip">★ your clip</string>
     <string name="clip_saved">Clip saved. Tap the button to play it.</string>
+    <string name="picture_saved">Picture saved.</string>
     <string name="clip_failed">Couldn\'t play your clip, playing the built-in sound.</string>
     <string name="no_picker">No file picker found on this phone.</string>
 </resources>
