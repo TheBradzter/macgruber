@@ -32,7 +32,12 @@ import android.widget.GridLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -51,16 +56,24 @@ public class MainActivity extends Activity {
         final String emoji;
         final String label;
         final int resId;
+        /** A clip loaded from the phone's clips folder, or null for a built-in sound. */
+        final File file;
 
         Sound(String key, String emoji, String label, int resId) {
+            this(key, emoji, label, resId, null);
+        }
+
+        Sound(String key, String emoji, String label, int resId, File file) {
             this.key = key;
             this.emoji = emoji;
             this.label = label;
             this.resId = resId;
+            this.file = file;
         }
     }
 
-    private static final Sound[] SOUNDS = {
+    /** Fallback sounds, used only when the phone's clips folder is empty. */
+    private static final Sound[] BUILT_IN = {
             new Sound("macgruber", "\uD83D\uDCAA", "MACGRUBER!", R.raw.snd_macgruber),
             new Sound("kfbr392", "\uD83D\uDE97", "KFBR392", R.raw.snd_kfbr392),
             new Sound("countdown", "\u23F1\uFE0F", "3… 2… 1… BOOM", R.raw.snd_countdown),
@@ -91,7 +104,8 @@ public class MainActivity extends Activity {
         TextView badge;
     }
 
-    private final Tile[] tiles = new Tile[SOUNDS.length];
+    private Sound[] sounds;
+    private Tile[] tiles;
     private final ExecutorService imageLoader = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
@@ -109,6 +123,8 @@ public class MainActivity extends Activity {
             pendingIndex = savedInstanceState.getInt(STATE_PENDING, -1);
         }
 
+        sounds = loadSounds();
+        tiles = new Tile[sounds.length];
         applyWindowInsets();
         buildGrid();
         findViewById(R.id.stop).setOnClickListener(v -> stopPlayback());
@@ -133,6 +149,55 @@ public class MainActivity extends Activity {
     }
 
     // ---------------------------------------------------------------- layout
+
+    private static final List<String> AUDIO_EXTENSIONS = Arrays.asList(
+            "mp3", "m4a", "aac", "ogg", "oga", "opus", "wav", "flac", "3gp", "amr", "mp4");
+    private static final String[] FALLBACK_EMOJI = {
+            "\uD83D\uDCA5", "\uD83D\uDCAA", "\uD83D\uDE0E", "\uD83D\uDD25", "\uD83D\uDCA3",
+            "\uD83E\uDD6C", "\uD83D\uDE97", "\uD83C\uDF96\uFE0F", "\uD83D\uDE80", "\uD83D\uDE31",
+            "\uD83C\uDFB8", "\uD83E\uDD85", "\uD83D\uDCCE", "\uD83D\uDE81", "\uD83D\uDCAF",
+            "\uD83D\uDE02"};
+
+    /**
+     * Clips copied into Android/data/com.thebradzter.macgruber/files/clips on the phone become the
+     * buttons, one per file, labelled from the file name. Built-in sounds are only used if that
+     * folder has no audio in it.
+     */
+    private Sound[] loadSounds() {
+        File dir = getExternalFilesDir("clips");
+        File[] files = dir == null ? null : dir.listFiles();
+        List<Sound> found = new ArrayList<>();
+        if (files != null) {
+            Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+            for (File f : files) {
+                String name = f.getName();
+                int dot = name.lastIndexOf('.');
+                if (!f.isFile() || dot <= 0) {
+                    continue;
+                }
+                String ext = name.substring(dot + 1).toLowerCase(Locale.ROOT);
+                if (!AUDIO_EXTENSIONS.contains(ext)) {
+                    continue;
+                }
+                String label = labelFromFileName(name.substring(0, dot));
+                String emoji = FALLBACK_EMOJI[found.size() % FALLBACK_EMOJI.length];
+                found.add(new Sound("file:" + name, emoji, label, 0, f));
+            }
+        }
+        return found.isEmpty() ? BUILT_IN : found.toArray(new Sound[0]);
+    }
+
+    /** "03_kfbr-392" becomes "KFBR 392". */
+    static String labelFromFileName(String base) {
+        String label = base.trim().replaceFirst("^\\d+[\\s._-]*", "")
+                .replaceAll("[_\\-.]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (label.isEmpty()) {
+            label = base;
+        }
+        return label.toUpperCase(Locale.ROOT);
+    }
 
     /**
      * Android 15+ draws apps edge to edge, so pad the bars to clear the status and
@@ -161,7 +226,7 @@ public class MainActivity extends Activity {
     private void buildGrid() {
         GridLayout grid = findViewById(R.id.grid);
         int margin = dp(6);
-        for (int i = 0; i < SOUNDS.length; i++) {
+        for (int i = 0; i < sounds.length; i++) {
             final int index = i;
             Tile tile = new Tile();
             tiles[i] = tile;
@@ -197,13 +262,13 @@ public class MainActivity extends Activity {
             column.setPadding(dp(6), dp(6), dp(6), dp(6));
 
             TextView emoji = new TextView(this);
-            emoji.setText(SOUNDS[i].emoji);
+            emoji.setText(sounds[i].emoji);
             emoji.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
             emoji.setGravity(Gravity.CENTER);
             column.addView(emoji);
 
             TextView label = new TextView(this);
-            label.setText(SOUNDS[i].label);
+            label.setText(sounds[i].label);
             label.setTextColor(Color.WHITE);
             label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
             label.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
@@ -237,7 +302,7 @@ public class MainActivity extends Activity {
     }
 
     private void refreshTile(int index) {
-        Sound s = SOUNDS[index];
+        Sound s = sounds[index];
         Tile tile = tiles[index];
         tile.badge.setVisibility(customUri(s) != null ? View.VISIBLE : View.GONE);
 
@@ -297,7 +362,7 @@ public class MainActivity extends Activity {
 
     private void play(int index) {
         stopPlayback();
-        Sound s = SOUNDS[index];
+        Sound s = sounds[index];
         MediaPlayer mp = null;
 
         Uri custom = customUri(s);
@@ -307,7 +372,10 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, R.string.clip_failed, Toast.LENGTH_SHORT).show();
             }
         }
-        if (mp == null) {
+        if (mp == null && s.file != null) {
+            mp = createPlayer(Uri.fromFile(s.file));
+        }
+        if (mp == null && s.resId != 0) {
             mp = MediaPlayer.create(this, s.resId);
         }
         if (mp == null) {
@@ -372,7 +440,7 @@ public class MainActivity extends Activity {
     }
 
     private void showCustomiseDialog(int index) {
-        Sound s = SOUNDS[index];
+        Sound s = sounds[index];
         boolean hasCustom = customUri(s) != null || pictureUri(s) != null;
 
         Dialog dialog = new Dialog(this);
@@ -428,12 +496,12 @@ public class MainActivity extends Activity {
         int index = pendingIndex;
         pendingIndex = -1;
         if (resultCode != RESULT_OK || data == null || data.getData() == null
-                || index < 0 || index >= SOUNDS.length) {
+                || index < 0 || index >= sounds.length) {
             return;
         }
 
         boolean isPicture = requestCode == REQUEST_PICK_PICTURE;
-        String key = isPicture ? PICTURE_PREFIX + SOUNDS[index].key : SOUNDS[index].key;
+        String key = isPicture ? PICTURE_PREFIX + sounds[index].key : sounds[index].key;
         Uri uri = data.getData();
         try {
             getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -450,7 +518,7 @@ public class MainActivity extends Activity {
         if (playingIndex == index) {
             stopPlayback();
         }
-        String[] keys = {SOUNDS[index].key, PICTURE_PREFIX + SOUNDS[index].key};
+        String[] keys = {sounds[index].key, PICTURE_PREFIX + sounds[index].key};
         for (String key : keys) {
             releaseOldPermission(key, null);
             prefs.edit().remove(key).apply();

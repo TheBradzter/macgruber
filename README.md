@@ -12,6 +12,12 @@ since those clips are copyrighted.
 (`tools/art/mascot.svg`). Real MacGruber stills aren't bundled because they're copyrighted and show a real
 actor's likeness, but you can add your own (see below).
 
+**Load a whole folder of your own clips:** copy audio files (mp3, m4a, ogg, wav, ...) to
+`Android/data/com.thebradzter.macgruber/files/clips/` on the phone, for example with
+`adb push <file> /sdcard/Android/data/com.thebradzter.macgruber/files/clips/`. Each file becomes a button,
+labelled from its file name (`03_kfbr-392.mp3` shows as "KFBR 392", sorted by name). While that folder has
+audio in it, the built-in sounds are hidden. Your clips stay on your phone and are never committed here.
+
 **Use your own clips and pictures:** hold any button, then tap **CHOOSE SOUND CLIP** or **CHOOSE PICTURE**
 and pick a file on your phone. Custom clips show "★ your clip"; custom pictures fill the button.
 Hold it again and tap **RESET BUTTON** to go back to the built-in sound and look.
