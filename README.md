@@ -55,3 +55,33 @@ adb pair <phone-ip>:<pairing-port>      # enter the 6-digit code
 adb connect <phone-ip>:<debug-port>     # the port shown on the Wireless debugging screen
 adb install -r MacGruberSoundboard.apk
 ```
+
+## iPhone app
+
+The iPhone version is in `ios/`, written in Swift (SwiftUI) with the same look, the same 20 built-in sounds
+(converted to `.m4a`) and the same mascot. It needs iOS 16 or newer.
+
+**Your own clips and GIFs on iPhone:** tap **IMPORT** and pick sound clips or pictures in the Files app, or drop
+them straight into *Files > On My iPhone > MacGruber* in the `clips` and `gifs` folders. They work exactly like
+the Android folders: each clip becomes a button named from its file name, and pictures with a matching name go on
+that button. Hold any button to give just that button your own clip or picture (from Files or Photos).
+Imported files stay on your phone and are never committed or bundled into the app.
+
+**Builds:** `.github/workflows/ios.yml` runs on GitHub's Macs. Every push that touches `ios/` builds the app and
+runs its tests. Once the three API key secrets below are set, pushes also sign the app and upload it to TestFlight.
+
+| Repository secret | What it is |
+| --- | --- |
+| `ASC_KEY_ID` | Key ID of an App Store Connect API key with the **Admin** role (Users and Access > Integrations) |
+| `ASC_ISSUER_ID` | Issuer ID shown above the list of keys on that page |
+| `ASC_KEY_P8` | The full text of the key's `.p8` file (`cat ~/Downloads/AuthKey_*.p8 \| pbcopy`) |
+
+With that key the workflow handles the rest of the signing setup through the App Store Connect API
+(`ios/ci/asc_signing.py`). It registers the bundle ID `com.thebradzter.macgruber`, creates one Apple Distribution
+certificate, and creates an App Store provisioning profile named "MacGruber GitHub CI App Store". The certificate is
+saved to `ios/ci/dist-cert.enc`, encrypted with a key derived from the API key, so later runs reuse it instead of
+making new ones. Only someone holding the API key can decrypt it, and anyone with that key could create a
+certificate anyway. If you replace the API key, the next run makes a fresh certificate. The app itself must exist
+in App Store Connect (My Apps > + > New App) with that bundle ID before the first upload.
+
+**Open it in Xcode on a Mac:** `brew install xcodegen`, then `cd ios && xcodegen` and open `MacGruber.xcodeproj`.

@@ -1,0 +1,212 @@
+name: iOS
+
+on:
+  push:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BUNDLE_ID: com.thebradzter.macgruber
+  HOMEBREW_NO_AUTO_UPDATE: '1'
+  HOMEBREW_NO_INSTALL_CLEANUP: '1'
+
+jobs:
+  # Builds and tests without signing, so it works without any Apple secrets.
+  build:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Generate Xcode project
+        run: brew install xcodegen && xcodegen generate
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          for runtime in sorted(devices, reverse=True):
+              if "iOS" in runtime:
+                  for d in devices[runtime]:
+                      if d["name"].startswith("iPhone"):
+                          print(d["udid"]); sys.exit()
+          sys.exit("No iPhone simulator found")')
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests on the simulator
+        run: |
+          xcodebuild test -project MacGruber.xcodeproj -scheme MacGruber \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO | tee test.log | grep -E 'error:|warning: .*\.swift|Test Case|TEST (SUCCEEDED|FAILED)|\*\*' ; exit ${PIPESTATUS[0]}
+
+      - name: Build for iPhone (unsigned)
+        run: |
+          xcodebuild archive -project MacGruber.xcodeproj -scheme MacGruber -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Unsigned.xcarchive \
+            CODE_SIGNING_ALLOWED=NO | tail -n 20 ; exit ${PIPESTATUS[0]}
+
+  # Signs the app and uploads it to TestFlight. Runs on pushes once the API key secrets are set.
+  # Everything else (certificate, bundle ID, provisioning profile) is created through the API.
+  testflight:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: macos-26
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: ios
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - name: Check Apple secrets
+        id: secrets
+        run: |
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::notice::Skipping TestFlight upload. Missing repository secrets:$missing"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+        working-directory: .
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
+
+      - name: Write API key
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          printf '%s\n' "$ASC_KEY_P8" | tr -d '\r' > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Set up signing (certificate, bundle ID, profile)
+        id: signing
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          OUT_DIR: ${{ runner.temp }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet 'cryptography>=42'
+          "$RUNNER_TEMP/venv/bin/python" ci/asc_signing.py prepare
+
+      # A newly created certificate is saved (encrypted with the API key) so later runs reuse it
+      # instead of making a new one each time. If it can't be saved it is revoked straight away.
+      - name: Save new certificate
+        if: steps.signing.outputs.created == 'true'
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
+          git add ci/dist-cert.enc
+          git commit -m "Save encrypted TestFlight signing certificate"
+          if ! git push origin "HEAD:${GITHUB_REF_NAME}"; then
+            "$RUNNER_TEMP/venv/bin/python" ci/asc_signing.py revoke "${{ steps.signing.outputs.cert_id }}"
+            echo "::error::Couldn't save the new certificate to the repo, so it was revoked. Re-run the workflow."
+            exit 1
+          fi
+
+      - name: Install certificate in a temporary keychain
+        id: keychain
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          P12_PATH: ${{ steps.signing.outputs.p12_path }}
+          P12_PASSWORD: ${{ steps.signing.outputs.p12_password }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          curl -fsSL -o "$RUNNER_TEMP/wwdr.cer" https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import "$RUNNER_TEMP/wwdr.cer" -k "$KEYCHAIN" -T /usr/bin/codesign || true
+          security import "$P12_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          rm -f "$P12_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep -E '"(Apple|iPhone|iOS) Distribution' | head -n 1 | awk '{print $2}')
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::The distribution certificate didn't import as a usable signing identity."
+            exit 1
+          fi
+          echo "keychain=$KEYCHAIN" >> "$GITHUB_OUTPUT"
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Xcode project
+        if: steps.secrets.outputs.ready == 'true'
+        run: brew install xcodegen && xcodegen generate
+
+      - name: Archive
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          BUILD_NUMBER=$(( ${{ github.run_number }} + 1000 ))
+          echo "Build number $BUILD_NUMBER"
+          xcodebuild archive -project MacGruber.xcodeproj -scheme MacGruber -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/MacGruber.xcarchive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="${{ steps.signing.outputs.team_id }}" \
+            CODE_SIGN_IDENTITY="${{ steps.keychain.outputs.identity }}" \
+            PROVISIONING_PROFILE_SPECIFIER="${{ steps.signing.outputs.profile_uuid }}" \
+            OTHER_CODE_SIGN_FLAGS="--keychain ${{ steps.keychain.outputs.keychain }}" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" | tail -n 30 ; exit ${PIPESTATUS[0]}
+
+      - name: Upload to TestFlight
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          cat > build/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${{ steps.signing.outputs.team_id }}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>${{ steps.keychain.outputs.identity }}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$BUNDLE_ID</key><string>${{ steps.signing.outputs.profile_uuid }}</string>
+            </dict>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath build/MacGruber.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "::notice::Uploaded MacGruber build $(( ${{ github.run_number }} + 1000 )) to App Store Connect. It shows in TestFlight after Apple finishes processing (usually 5 to 30 minutes)."
+
+      - name: Clean up
+        if: always()
+        run: |
+          [ -n "${{ steps.keychain.outputs.keychain }}" ] && security delete-keychain "${{ steps.keychain.outputs.keychain }}" || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/dist.p12"
+        working-directory: .
